@@ -55,7 +55,7 @@ public class Entry<K, V> {
      * Determines whether the entries are equal, 
      * returning true if their keys equal.
      *
-     * @param value The entry to compare with.
+
      */
     public boolean equals(Object obj) {
         Entry<K, V> other = (Entry<K, V>) obj;
