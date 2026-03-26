@@ -3,25 +3,28 @@ package com.javaschool.hashtables;
 public class QuadraticProbingHashTable {
 
     private Integer[] keys;
-    private boolean[] used;   // tracks which slots were ever used (for probing)
+    private boolean[] deleted;
+
     private int size;
+    private int deletedCount;
     private int capacity;
-    private final double maxLoadFactor = 0.75;
+
+    private static final double MAX_LOAD = 0.50;
 
     public QuadraticProbingHashTable() {
-        this.capacity = 5;   // required initial capacity
+        this.capacity = 11; // must be prime
         this.keys = new Integer[capacity];
-        this.used = new boolean[capacity];
+        this.deleted = new boolean[capacity];
         this.size = 0;
+        this.deletedCount = 0;
     }
 
-    // Required hash function: h(x) = x^2 mod m
+    // h(x) = x^2 mod m
     private int hash(int x) {
         long sq = (long) x * (long) x;
         return (int) (sq % capacity);
     }
 
-    // Required probing: offset(i) = (i + i^2) / 2
     private int probeIndex(int h, int i) {
         int offset = (i + i * i) / 2;
         return (h + offset) % capacity;
@@ -31,108 +34,151 @@ public class QuadraticProbingHashTable {
         return (double) size / capacity;
     }
 
-    // Resize when load factor > 0.75 (double size)
-    private void resize() {
-        int oldCapacity = capacity;
-        Integer[] oldKeys = keys;
-        boolean[] oldUsed = used;
 
-        capacity *= 2;
-        keys = new Integer[capacity];
-        used = new boolean[capacity];
-        size = 0;
-
-        for (int i = 0; i < oldCapacity; i++) {
-            if (oldKeys[i] != null) {
-                add(oldKeys[i]);
-            }
-        }
-    }
-
-    // Add operation
     public void add(int key) {
-        if (loadFactor() > maxLoadFactor) {
+        // Resize if too full OR too many tombstones
+        if (loadFactor() >= MAX_LOAD || deletedCount > size) {
             resize();
         }
 
         int h = hash(key);
+        int firstDeleted = -1;
 
         for (int i = 0; i < capacity; i++) {
             int idx = probeIndex(h, i);
 
-            if (keys[idx] == null) {
-                keys[idx] = key;
-                used[idx] = true;
-                size++;
+            // ✅ Found existing key → do nothing
+            if (keys[idx] != null && !deleted[idx] && keys[idx] == key) {
                 return;
             }
 
-            if (keys[idx] != null && keys[idx] == key) {
-                return; // duplicate add ignored
+            // ✅ Record tombstone
+            if (deleted[idx] && firstDeleted == -1) {
+                firstDeleted = idx;
             }
+
+            // ✅ Empty slot → insert
+            if (keys[idx] == null && !deleted[idx]) {
+                int target = (firstDeleted != -1) ? firstDeleted : idx;
+
+                keys[target] = key;
+
+                if (deleted[target]) {
+                    deleted[target] = false;
+                    deletedCount--;
+                }
+
+                size++;
+                return;
+            }
+        }
+
+        // Found no truly empty found, but tombstone does exist
+        if (firstDeleted != -1) {
+            keys[firstDeleted] = key;
+            deleted[firstDeleted] = false;
+            deletedCount--;
+            size++;
         }
     }
 
-    // Find operation
     public boolean find(int key) {
         int h = hash(key);
 
         for (int i = 0; i < capacity; i++) {
             int idx = probeIndex(h, i);
 
-            if (!used[idx]) return false; // never used → key cannot be here
-            if (keys[idx] != null && keys[idx] == key) return true;
+            if (keys[idx] == null && !deleted[idx]) return false;
+
+            if (keys[idx] != null && !deleted[idx] && keys[idx] == key) {
+                return true;
+            }
         }
 
         return false;
     }
 
-    // Remove operation
     public void remove(int key) {
         int h = hash(key);
 
         for (int i = 0; i < capacity; i++) {
             int idx = probeIndex(h, i);
 
-            if (!used[idx])
-                return; // key not found
-            if (keys[idx] != null && keys[idx] == key) {
+            if (keys[idx] == null && !deleted[idx]) return;
+
+            if (keys[idx] != null && !deleted[idx] && keys[idx] == key) {
                 keys[idx] = null;
+                deleted[idx] = true;
                 size--;
-                rehashCluster(idx);
+                deletedCount++;
                 return;
             }
         }
     }
 
-    // Rehash cluster after deletion
-    private void rehashCluster(int start) {
-        int i = 1;
+    public int size() {
+        return size;
+    }
 
-        while (true) {
-            int idx = (start + i) % capacity;
+    public boolean isEmpty() {
+        return size == 0;
+    }
 
-            if (!used[idx] || keys[idx] == null) return;
+    private void resize() {
+        int newCapacity = nextPrime(capacity * 2);
 
-            int keyToRehash = keys[idx];
-            keys[idx] = null;
-            size--;
+        Integer[] oldKeys = keys;
+        boolean[] oldDeleted = deleted;
 
-            add(keyToRehash);
+        keys = new Integer[newCapacity];
+        deleted = new boolean[newCapacity];
+        capacity = newCapacity;
 
-            i++;
+        size = 0;
+        deletedCount = 0;
+
+        for (int i = 0; i < oldKeys.length; i++) {
+            if (oldKeys[i] != null && !oldDeleted[i]) {
+                add(oldKeys[i]);
+            }
         }
     }
+
+
+    private int nextPrime(int n) {
+        int candidate = (n % 2 == 0) ? n + 1 : n;
+        while (!isPrime(candidate)) candidate += 2;
+        return candidate;
+    }
+
+    private boolean isPrime(int n) {
+        if (n < 2) return false;
+        if (n == 2) return true;
+        if (n % 2 == 0) return false;
+
+        for (int i = 3; (long) i * i <= n; i += 2) {
+            if (n % i == 0) return false;
+        }
+        return true;
+    }
+
+    // ── Debug View ─────────────────────────────────────────
 
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append("Table (size=").append(size)
-          .append(", capacity=").append(capacity).append(")\n");
+                .append(", capacity=").append(capacity)
+                .append(", tombstones=").append(deletedCount)
+                .append(")\n");
 
         for (int i = 0; i < capacity; i++) {
             sb.append(i).append(": ");
-            sb.append(keys[i] == null ? "---" : keys[i]);
+            if (keys[i] == null) {
+                sb.append(deleted[i] ? "<deleted>" : "---");
+            } else {
+                sb.append(keys[i]);
+            }
             sb.append("\n");
         }
         return sb.toString();

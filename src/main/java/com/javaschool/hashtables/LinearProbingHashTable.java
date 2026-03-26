@@ -2,7 +2,7 @@ package com.javaschool.hashtables;
 
 public class LinearProbingHashTable<K, V> implements HashTable<K, V> {
 
-    private static final int INIT_CAPACITY = 10;
+    private static final int INIT_CAPACITY = 11;
 
     private Entry<K, V>[] table;
     private int size;

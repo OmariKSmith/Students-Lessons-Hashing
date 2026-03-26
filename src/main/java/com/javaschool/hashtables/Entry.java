@@ -3,6 +3,7 @@ package com.javaschool.hashtables;
 public class Entry<K, V> {
     private K key;
     private V value;
+    boolean isDeleted;
 
     /**
      * Constructs an entry with the specified key and value.
@@ -13,6 +14,7 @@ public class Entry<K, V> {
     public Entry(K key, V value) {
         this.key = key;
         this.value = value;
+        this.isDeleted = false;
     }
 
     /**
@@ -51,12 +53,22 @@ public class Entry<K, V> {
         this.value = value;
     }
 
+    public boolean isDeleted() {
+        return isDeleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        isDeleted = deleted;
+    }
+
     /**
      * Determines whether the entries are equal, 
      * returning true if their keys equal.
      *
 
      */
+
+
     public boolean equals(Object obj) {
         Entry<K, V> other = (Entry<K, V>) obj;
         return this.key.equals(other.key);
